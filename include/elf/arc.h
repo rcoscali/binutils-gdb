@@ -67,4 +67,26 @@ END_RELOC_NUMBERS (R_ARC_max)
 
 #define EF_ARC_PIC 0x00000100
 
+/* Additional section types.  */
+#define SHT_ARC_ATTRIBUTES     0x70000001	/* Section holds attributes.  */
+
+/* ARC ABI object attributes.  */
+enum {
+  Tag_ARC_PCS_config = 1,
+  Tag_ARC_CPU_base = 2,
+  Tag_ARC_CPU_variation = 3,
+  Tag_ARC_CPU_name = 4,
+  Tag_ARC_ABI_rf16 = 5,
+  Tag_ARC_ABI_osver = 6,
+  Tag_ARC_ABI_sda = 7,
+  Tag_ARC_ABI_pic = 8,
+  Tag_ARC_ABI_tls = 9,
+  Tag_ARC_ABI_enumsize = 10,
+  Tag_ARC_ABI_exceptions = 11,
+  Tag_ARC_ABI_double_size = 12,
+  Tag_ARC_ISA_config = 13,
+  Tag_ARC_ISA_apex = 14,
+  Tag_ARC_ISA_mpy_option = 15
+};
+
 #endif /* _ELF_ARC_H */
