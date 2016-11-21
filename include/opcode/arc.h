@@ -50,10 +50,12 @@ typedef enum
   DIVREM,
   DPI,
   DSP,
+  ENTER,
   FLOAT,
   INVALID,
   JUMP,
   KERNEL,
+  LEAVE,
   LOAD,
   LOGICAL,
   MEMORY,
@@ -62,7 +64,10 @@ typedef enum
   NET,
   PROTOCOL_DECODE,
   PMU,
+  POP,
+  PUSH,
   STORE,
+  SUB,
   XY
 } insn_class_t;
 
@@ -111,7 +116,16 @@ typedef enum
   F_CLASS_EXTEND = (1 << 2),
 
   /* Condition code flag.  */
-  F_CLASS_COND = (1 << 3)
+  F_CLASS_COND = (1 << 3),
+
+  /* Write back mode.  */
+  F_CLASS_WB = (1 << 4),
+
+  /* Data size.  */
+  F_CLASS_ZZ = (1 << 5),
+
+  /* Implicit flag.  */
+  F_CLASS_IMPLICIT = (1 << 6)
 } flag_class_t;
 
 /* The opcode table is an array of struct arc_opcode.  */
