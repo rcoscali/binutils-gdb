@@ -13180,19 +13180,19 @@ display_arc_attribute (unsigned char * p,
       switch (val)
 	{
 	default:
-	case 0:
+	case TAG_CPU_NONE:
 	  printf (_("Absent\n"));
 	  break;
-	case 1:
+	case TAG_CPU_ARC6xx:
 	  printf ("ARC6xx\n");
 	  break;
-	case 2:
+	case TAG_CPU_ARC7xx:
 	  printf ("ARC7xx\n");
 	  break;
-	case 3:
+	case TAG_CPU_ARCEM:
 	  printf ("ARCEM\n");
 	  break;
-	case 4:
+	case TAG_CPU_ARCHS:
 	  printf ("ARCHS\n");
 	  break;
 	}
@@ -13223,7 +13223,7 @@ display_arc_attribute (unsigned char * p,
       break;
 
     case Tag_ARC_CPU_name:
-      printf ("  Tag_ARC_CPU_variation: ");
+      printf ("  Tag_ARC_CPU_name: ");
       p = display_tag_value (-1, p, end);
       break;
 
@@ -13236,7 +13236,7 @@ display_arc_attribute (unsigned char * p,
     case Tag_ARC_ABI_osver:
       val = read_uleb128 (p, &len, end);
       p += len;
-      printf ("  Tag_ARC_ABI_osver: OSABI v%d\n", val);
+      printf ("  Tag_ARC_ABI_osver: v%d\n", val);
       break;
 
     case Tag_ARC_ABI_sda:

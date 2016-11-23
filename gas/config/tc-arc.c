@@ -55,6 +55,10 @@
 #define TARGET_WITH_CPU "arc700"
 #endif /* TARGET_WITH_CPU */
 
+#define ARC_GET_FLAG(s)   	(*symbol_get_tc (s))
+#define ARC_SET_FLAG(s,v) 	(*symbol_get_tc (s) |= (v))
+#define streq(a, b)	      (strcmp (a, b) == 0)
+
 /* Enum used to enumerate the relaxable ins operands.  */
 enum rlx_operand_type
 {
@@ -147,6 +151,7 @@ static void arc_option (int);
 static void arc_extra_reloc (int);
 static void arc_extinsn (int);
 static void arc_extcorereg (int);
+static void arc_attribute (int);
 
 const pseudo_typeS md_pseudo_table[] =
 {
@@ -158,6 +163,7 @@ const pseudo_typeS md_pseudo_table[] =
   { "lcommon", arc_lcomm, 0 },
   { "cpu",     arc_option, 0 },
 
+  { "arc_attribute",   arc_attribute, 0 },
   { "extinstruction",  arc_extinsn, 0 },
   { "extcoreregister", arc_extcorereg, EXT_CORE_REGISTER },
   { "extauxregister",  arc_extcorereg, EXT_AUX_REGISTER },
@@ -483,22 +489,6 @@ static const struct cpu_type
 /* Information about the cpu/variant we're assembling for.  */
 static struct cpu_type selected_cpu = { 0, 0, 0, 0, 0 };
 
-/* A table with options.  */
-static const struct feature_type
-{
-  unsigned feature;
-  unsigned cpus;
-  const char *name;
-}
-  feature_list[] =
-{
-  { ARC_CD, ARC_OPCODE_ARCV2, "code-density" },
-  { ARC_NPS400, ARC_OPCODE_ARC700, "nps400" },
-  { ARC_SPFP, ARC_OPCODE_ARCFPX, "single-precision FPX" },
-  { ARC_DPFP, ARC_OPCODE_ARCFPX, "double-precision FPX" },
-  { ARC_FPUDA, ARC_OPCODE_ARCv2EM, "double assist FP" }
-};
-
 /* Command line given features.  */
 static unsigned cl_features = 0;
 
@@ -705,6 +695,9 @@ symbolS * GOT_symbol = 0;
 
 /* Set to TRUE when we assemble instructions.  */
 static bfd_boolean assembling_insn = FALSE;
+
+/* List with attributes set explicitly.  */
+static bfd_boolean attributes_set_explicitly[NUM_KNOWN_OBJ_ATTRIBUTES];
 
 /* Functions implementation.  */
 
@@ -4765,6 +4758,173 @@ arc_extcorereg (int opertype)
       break;
     }
   create_extcore_section (&ereg, opertype);
+}
+
+/* Parse a .arc_attribute directive.  */
+
+static void
+arc_attribute (int ignored ATTRIBUTE_UNUSED)
+{
+  int tag = obj_elf_vendor_attribute (OBJ_ATTR_PROC);
+
+  if (tag < NUM_KNOWN_OBJ_ATTRIBUTES)
+    attributes_set_explicitly[tag] = TRUE;
+}
+
+/* Set an attribute if it has not already been set by the user.  */
+
+static void
+arc_set_attribute_int (int tag, int value)
+{
+  if (tag < 1
+      || tag >= NUM_KNOWN_OBJ_ATTRIBUTES
+      || !attributes_set_explicitly[tag])
+    bfd_elf_add_proc_attr_int (stdoutput, tag, value);
+}
+
+static void
+arc_set_attribute_string (int tag, const char *value)
+{
+  if (tag < 1
+      || tag >= NUM_KNOWN_OBJ_ATTRIBUTES
+      || !attributes_set_explicitly[tag])
+    bfd_elf_add_proc_attr_string (stdoutput, tag, value);
+}
+
+/* Allocate and concatenate two strings.  s1 can be NULL but not
+   s2.  s1 pointer is freed at end of this procedure.  */
+
+static char *
+arc_stralloc (char * s1, const char * s2)
+{
+  char * p;
+  int len = 0;
+
+  if (s1)
+    len = strlen (s1) + 1;
+
+  /* Only s1 can be null.  */
+  gas_assert (s2);
+  len += strlen (s2) + 1;
+
+  p = (char *) xmalloc (len);
+  if (p == NULL)
+    as_fatal (_("Virtual memory exhausted"));
+
+  if (s1)
+    {
+      strcpy (p, s1);
+      strcat (p, ",");
+      strcat (p, s2);
+      free (s1);
+    }
+  else
+    strcpy (p, s2);
+
+  return p;
+}
+
+/* Set the public ARC object attributes.  */
+
+static void
+arc_set_public_attributes (void)
+{
+  int base = 0;
+  char *s = NULL;
+  unsigned int i;
+
+  /* Tag_ARC_CPU_name.  */
+  arc_set_attribute_string (Tag_ARC_CPU_name, selected_cpu.name);
+
+  /* Tag_ARC_CPU_base.  */
+  switch (selected_cpu.eflags & EF_ARC_MACH_MSK)
+    {
+    case E_ARC_MACH_ARC600:
+    case E_ARC_MACH_ARC601:
+      base = TAG_CPU_ARC6xx;
+      break;
+    case E_ARC_MACH_ARC700:
+      base = TAG_CPU_ARC7xx;
+      break;
+    case  EF_ARC_CPU_ARCV2EM:
+      base = TAG_CPU_ARCEM;
+      break;
+    case  EF_ARC_CPU_ARCV2HS:
+      base = TAG_CPU_ARCHS;
+      break;
+    default:
+      base = 0;
+      break;
+    }
+  arc_set_attribute_int (Tag_ARC_CPU_base, base);
+
+  /* Tag_ARC_CPU_variation.  */
+  arc_set_attribute_int (Tag_ARC_CPU_variation, 0);
+
+  /* Tag_ARC_ABI_osver.  */
+  arc_set_attribute_int (Tag_ARC_ABI_osver, E_ARC_OSABI_CURRENT >> 8);
+
+  /* Tag_ARC_ISA_config.  */
+  for (i = 0; i < ARRAY_SIZE (feature_list); i++)
+    if (selected_cpu.features & feature_list[i].feature)
+      s = arc_stralloc (s, feature_list[i].attr);
+
+  if (s)
+    arc_set_attribute_string (Tag_ARC_ISA_config, s);
+}
+
+/* Add the default contents for the .ARC.attributes section.  */
+
+void
+arc_md_end (void)
+{
+  if ((selected_cpu.eflags & EF_ARC_OSABI_MSK) < E_ARC_OSABI_V4)
+    return;
+  arc_set_public_attributes ();
+}
+
+void arc_copy_symbol_attributes (symbolS *dest, symbolS *src)
+{
+  ARC_GET_FLAG (dest) = ARC_GET_FLAG (src);
+}
+
+int arc_convert_symbolic_attribute (const char *name)
+{
+  static const struct
+  {
+    const char * name;
+    const int    tag;
+  }
+  attribute_table[] =
+    {
+#define T(tag) {#tag, tag}
+  T (Tag_ARC_PCS_config),
+  T (Tag_ARC_CPU_base),
+  T (Tag_ARC_CPU_variation),
+  T (Tag_ARC_CPU_name),
+  T (Tag_ARC_ABI_rf16),
+  T (Tag_ARC_ABI_osver),
+  T (Tag_ARC_ABI_sda),
+  T (Tag_ARC_ABI_pic),
+  T (Tag_ARC_ABI_tls),
+  T (Tag_ARC_ABI_enumsize),
+  T (Tag_ARC_ABI_exceptions),
+  T (Tag_ARC_ABI_double_size),
+  T (Tag_ARC_ISA_config),
+  T (Tag_ARC_ISA_apex),
+  T (Tag_ARC_ISA_mpy_option)
+#undef T
+    };
+  unsigned int i;
+
+  if (name == NULL)
+    return -1;
+
+  for (i = 0; i < ARRAY_SIZE (attribute_table); i++)
+    if (streq (name, attribute_table[i].name))
+      return attribute_table[i].tag;
+
+  return -1;
 }
 
 /* Local variables:
