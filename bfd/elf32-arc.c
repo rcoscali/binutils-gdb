@@ -29,6 +29,10 @@
 #include "opcode/arc.h"
 #include "arc-plt.h"
 
+#define FEATURE_LIST_NAME bfd_feature_list
+#define CONFLICT_LIST bfd_conflict_list
+#include "opcode/arc-attrs.h"
+
 /* #define ARC_ENABLE_DEBUG 1  */
 #ifdef ARC_ENABLE_DEBUG
 static const char *
@@ -552,11 +556,44 @@ arc_extract_features (const char *p)
   if (!p)
     return 0;
 
-  for (i = 0; (i < ARRAY_SIZE (feature_list)); i++)
-    if (strstr(p, feature_list[i].attr) != NULL)
-      r |= feature_list[i].feature;
+  for (i = 0; (i < ARRAY_SIZE (bfd_feature_list)); i++)
+    if (strstr(p, bfd_feature_list[i].attr) != NULL)
+      r |= bfd_feature_list[i].feature;
 
   return r;
+}
+
+/* Allocate and concatenate two strings.  s1 can be NULL but not
+   s2.  s1 pointer is freed at end of this procedure.  */
+
+static char *
+arc_stralloc (char * s1, const char * s2)
+{
+  char * p;
+  int len = 0;
+
+  if (s1)
+    len = strlen (s1) + 1;
+
+  /* Only s1 can be null.  */
+  BFD_ASSERT (s2);
+  len += strlen (s2) + 1;
+
+  p = (char *) xmalloc (len);
+  if (p == NULL)
+    return NULL;
+
+  if (s1)
+    {
+      strcpy (p, s1);
+      strcat (p, ",");
+      strcat (p, s2);
+      free (s1);
+    }
+  else
+    strcpy (p, s2);
+
+  return p;
 }
 
 /* Merge ARC object attributes from IBFD into OBFD.  Raise an error if
@@ -642,19 +679,19 @@ arc_elf_merge_attributes (bfd *ibfd, struct bfd_link_info *info)
 	      unsigned opcode_map[] = {0, ARC_OPCODE_ARC600, ARC_OPCODE_ARC700,
 				       ARC_OPCODE_ARCv2EM, ARC_OPCODE_ARCv2HS};
 
-	      BFD_ASSERT (in_attr[i].i < 5);
-	      BFD_ASSERT (out_attr[i].i < 5);
+	      BFD_ASSERT (in_attr[i].i < sizeof (opcode_map) + 1);
+	      BFD_ASSERT (out_attr[i].i < sizeof (opcode_map) + 1);
 	      cpu1 = opcode_map[in_attr[i].i];
 	      cpu2 = opcode_map[out_attr[i].i];
 
 	      in_feature = arc_extract_features (p1);
 	      out_feature = arc_extract_features (p2);
 
-	      for (j = 0; j < ARRAY_SIZE (feature_list); j++)
-		if (((in_feature & feature_list[j].feature)
-		     && !(cpu1 & feature_list[i].cpus))
-		    || ((out_feature & feature_list[j].feature)
-			&& !(cpu2 & feature_list[i].cpus)))
+	      for (j = 0; j < ARRAY_SIZE (bfd_feature_list); j++)
+		if (((in_feature & bfd_feature_list[j].feature)
+		     && !(cpu1 & bfd_feature_list[i].cpus))
+		    || ((out_feature & bfd_feature_list[j].feature)
+			&& !(cpu2 & bfd_feature_list[i].cpus)))
 		  {
 		    _bfd_error_handler
 		      (_("error: %B: unable to merge ISA extension attributes "
@@ -663,7 +700,24 @@ arc_elf_merge_attributes (bfd *ibfd, struct bfd_link_info *info)
 		    result = FALSE;
 		    break;
 		  }
-
+	      for (j = 0; j < ARRAY_SIZE (bfd_conflict_list); j++)
+		if (((in_feature ^ out_feature) & bfd_conflict_list[j])
+		    == bfd_conflict_list[j])
+		  {
+		    _bfd_error_handler
+		      (_("error: %B: conflicting ISA extension attributes "
+			 "with %B"),
+		       obfd, ibfd);
+		    result = FALSE;
+		    break;
+		  }
+	      /* Everithing is alright.  */
+	      out_feature |= in_feature;
+	      p1 = NULL;
+	      for (j = 0; j < ARRAY_SIZE (bfd_feature_list); j++)
+		if (out_feature & bfd_feature_list[i].feature)
+		  p1 = arc_stralloc (p1, bfd_feature_list[i].attr);
+	      out_attr[Tag_ARC_ISA_config].s = _bfd_elf_attr_strdup (obfd, p1);
 	    }
 	  break;
 
@@ -950,7 +1004,7 @@ arc_elf_final_write_processing (bfd * abfd,
   if (osver)
     elf_elfheader (abfd)->e_flags |= osver << 8;
   else
-    elf_elfheader (abfd)->e_flags |= E_ARC_OSABI_CURRENT;
+    elf_elfheader (abfd)->e_flags |= E_ARC_OSABI_V3;
 
   return;
 }

@@ -687,16 +687,6 @@ typedef enum
 
 #define ARC_NUM_ADDRTYPES 16
 
-/* A table with options.  */
-const struct feature_type
-{
-  unsigned feature;
-  unsigned cpus;
-  const char *attr;
-  const char *name;
-};
-extern const struct feature_type  feature_list[6];
-
 #ifdef __cplusplus
 }
 #endif

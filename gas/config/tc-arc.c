@@ -28,6 +28,7 @@
 #include "safe-ctype.h"
 
 #include "opcode/arc.h"
+#include "opcode/arc-attrs.h"
 #include "elf/arc.h"
 #include "../opcodes/arc-ext.h"
 
@@ -687,9 +688,6 @@ const struct arc_relaxable_ins arc_relaxable_insns[] =
 
 const unsigned arc_num_relaxable_ins = ARRAY_SIZE (arc_relaxable_insns);
 
-/* Flags to set in the elf header.  */
-static const flagword arc_initial_eflag = 0x00;
-
 /* Pre-defined "_GLOBAL_OFFSET_TABLE_".  */
 symbolS * GOT_symbol = 0;
 
@@ -894,7 +892,7 @@ arc_select_cpu (const char *arg, enum mach_selection_type sel)
   /* Check if set features are compatible with the chosen CPU.  */
   arc_check_feature ();
   gas_assert (cpu_flags != 0);
-  selected_cpu.eflags = (arc_initial_eflag & ~EF_ARC_MACH_MSK) | cpu_flags;
+  selected_cpu.eflags = E_ARC_OSABI_CURRENT | cpu_flags;
   mach_selection_mode = sel;
 }
 

@@ -2601,12 +2601,3 @@ arc_opcode_len (const struct arc_opcode *opcode)
 
   return 8;
 }
-
-const struct feature_type feature_list[] =
-  {
-    { ARC_CD,     ARC_OPCODE_ARCV2,   "CD",     "code-density" },
-    { ARC_NPS400, ARC_OPCODE_ARC700,  "NPS400", "nps400" },
-    { ARC_SPFP,   ARC_OPCODE_ARCFPX,  "SPFP",   "single-precision FPX" },
-    { ARC_DPFP,   ARC_OPCODE_ARCFPX,  "DPFP",   "double-precision FPX" },
-    { ARC_FPUDA,  ARC_OPCODE_ARCv2EM, "FPUDA",  "double assist FP" }
-  };
