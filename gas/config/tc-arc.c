@@ -460,22 +460,22 @@ static const struct cpu_type
   /* Legacy CPU definition.  */
   ARC_CPU_TYPE_A6xx (arc600, 0x00),
   ARC_CPU_TYPE_A7xx (arc700, 0x00),
-  ARC_CPU_TYPE_A7xx (nps400, ARC_NPS400),
+  ARC_CPU_TYPE_A7xx (nps400, NPS400),
   ARC_CPU_TYPE_AV2EM (arcem, 0x00),
-  ARC_CPU_TYPE_AV2HS (archs, ARC_CD),
+  ARC_CPU_TYPE_AV2HS (archs, CD),
 
   /* GCC alike CPUs.  */
   ARC_CPU_TYPE_AV2EM (em,	  0x00),
-  ARC_CPU_TYPE_AV2EM (em4,	  ARC_CD),
-  ARC_CPU_TYPE_AV2EM (em4_dmips,  ARC_CD),
-  ARC_CPU_TYPE_AV2EM (em4_fpus,	  ARC_CD),
-  ARC_CPU_TYPE_AV2EM (em4_fpuda,  ARC_CD | ARC_FPUDA),
-  ARC_CPU_TYPE_AV2EM (quarkse_em, ARC_CD | ARC_SPFP | ARC_DPFP),
+  ARC_CPU_TYPE_AV2EM (em4,	  CD),
+  ARC_CPU_TYPE_AV2EM (em4_dmips,  CD),
+  ARC_CPU_TYPE_AV2EM (em4_fpus,	  CD),
+  ARC_CPU_TYPE_AV2EM (em4_fpuda,  CD | DPA),
+  ARC_CPU_TYPE_AV2EM (quarkse_em, CD | SPX | DPX),
 
-  ARC_CPU_TYPE_AV2HS (hs,	  ARC_CD),
-  ARC_CPU_TYPE_AV2HS (hs34,	  ARC_CD),
-  ARC_CPU_TYPE_AV2HS (hs38,	  ARC_CD),
-  ARC_CPU_TYPE_AV2HS (hs38_linux, ARC_CD),
+  ARC_CPU_TYPE_AV2HS (hs,	  CD),
+  ARC_CPU_TYPE_AV2HS (hs34,	  CD),
+  ARC_CPU_TYPE_AV2HS (hs38,	  CD),
+  ARC_CPU_TYPE_AV2HS (hs38_linux, CD),
 
   ARC_CPU_TYPE_A6xx (arc600_norm,     0x00),
   ARC_CPU_TYPE_A6xx (arc600_mul64,    0x00),
@@ -488,7 +488,7 @@ static const struct cpu_type
 };
 
 /* Information about the cpu/variant we're assembling for.  */
-static struct cpu_type selected_cpu = { 0, 0, 0, 0, 0 };
+static struct cpu_type selected_cpu = { 0, 0, 0, E_ARC_OSABI_CURRENT, 0 };
 
 /* Command line given features.  */
 static unsigned cl_features = 0;
@@ -825,15 +825,16 @@ arc_check_feature (void)
   if (!selected_cpu.features
       || !selected_cpu.name)
     return;
-  for (i = 0; (i < ARRAY_SIZE (feature_list)); i++)
-    {
-      if ((selected_cpu.features & feature_list[i].feature)
-	  && !(selected_cpu.flags & feature_list[i].cpus))
-	{
-	  as_bad (_("invalid %s option for %s cpu"), feature_list[i].name,
-		  selected_cpu.name);
-	}
-    }
+
+  for (i = 0; i < ARRAY_SIZE (feature_list); i++)
+    if ((selected_cpu.features & feature_list[i].feature)
+	&& !(selected_cpu.flags & feature_list[i].cpus))
+      as_bad (_("invalid %s option for %s cpu"), feature_list[i].name,
+	      selected_cpu.name);
+
+  for (i = 0; i < ARRAY_SIZE (conflict_list); i++)
+    if ((selected_cpu.features & conflict_list[i]) == conflict_list[i])
+      as_bad(_("conflicting ISA extension attributes."));
 }
 
 /* Select an appropriate entry from CPU_TYPES based on ARG and initialise
@@ -881,7 +882,8 @@ arc_select_cpu (const char *arg, enum mach_selection_type sel)
 	  selected_cpu.name = cpu_types[i].name;
 	  selected_cpu.features = cpu_types[i].features | cl_features;
 	  selected_cpu.mach = cpu_types[i].mach;
-	  cpu_flags = cpu_types[i].eflags;
+	  selected_cpu.eflags = ((selected_cpu.eflags & ~EF_ARC_MACH_MSK)
+				 | cpu_types[i].eflags);
           break;
         }
     }
@@ -891,8 +893,7 @@ arc_select_cpu (const char *arg, enum mach_selection_type sel)
 
   /* Check if set features are compatible with the chosen CPU.  */
   arc_check_feature ();
-  gas_assert (cpu_flags != 0);
-  selected_cpu.eflags = E_ARC_OSABI_CURRENT | cpu_flags;
+
   mach_selection_mode = sel;
 }
 
@@ -1619,19 +1620,19 @@ allocate_tok (expressionS *tok, int ntok, int cidx)
 static bfd_boolean
 check_cpu_feature (insn_subclass_t sc)
 {
-  if (is_code_density_p (sc) && !(selected_cpu.features & ARC_CD))
+  if (is_code_density_p (sc) && !(selected_cpu.features & CD))
     return FALSE;
 
-  if (is_spfp_p (sc) && !(selected_cpu.features & ARC_SPFP))
+  if (is_spfp_p (sc) && !(selected_cpu.features & SPX))
     return FALSE;
 
-  if (is_dpfp_p (sc) && !(selected_cpu.features & ARC_DPFP))
+  if (is_dpfp_p (sc) && !(selected_cpu.features & DPX))
     return FALSE;
 
-  if (is_fpuda_p (sc) && !(selected_cpu.features & ARC_FPUDA))
+  if (is_fpuda_p (sc) && !(selected_cpu.features & DPA))
     return FALSE;
 
-  if (is_nps400_p (sc) && !(selected_cpu.features & ARC_NPS400))
+  if (is_nps400_p (sc) && !(selected_cpu.features & NPS400))
     return FALSE;
 
   return TRUE;
@@ -2338,6 +2339,18 @@ find_special_case (const char *opname,
   return entry;
 }
 
+/* Autodetect cpu feature list.  */
+
+static void
+autodetect_feature_list (const struct arc_opcode *opcode)
+{
+  unsigned i;
+
+  for (i = 0; i < ARRAY_SIZE (feature_list); i++)
+    if (opcode->subclass == feature_list[i].feature)
+      selected_cpu.features |= feature_list[i].feature;
+}
+
 /* Given an opcode name, pre-tockenized set of argumenst and the
    opcode flags, take it all the way through emission.  */
 
@@ -2373,6 +2386,7 @@ assemble_tokens (const char *opname,
 	{
 	  struct arc_insn insn;
 
+	  autodetect_feature_list (opcode);
 	  assemble_insn (opcode, tok, ntok, pflags, nflgs, &insn);
 	  emit_insn (&insn);
 	  return;
@@ -3377,8 +3391,8 @@ md_parse_option (int c, const char *arg ATTRIBUTE_UNUSED)
       break;
 
     case OPTION_CD:
-      selected_cpu.features |= ARC_CD;
-      cl_features |= ARC_CD;
+      selected_cpu.features |= CD;
+      cl_features |= CD;
       arc_check_feature ();
       break;
 
@@ -3387,26 +3401,26 @@ md_parse_option (int c, const char *arg ATTRIBUTE_UNUSED)
       break;
 
     case OPTION_NPS400:
-      selected_cpu.features |= ARC_NPS400;
-      cl_features |= ARC_NPS400;
+      selected_cpu.features |= NPS400;
+      cl_features |= NPS400;
       arc_check_feature ();
       break;
 
     case OPTION_SPFP:
-      selected_cpu.features |= ARC_SPFP;
-      cl_features |= ARC_SPFP;
+      selected_cpu.features |= SPX;
+      cl_features |= SPX;
       arc_check_feature ();
       break;
 
     case OPTION_DPFP:
-      selected_cpu.features |= ARC_DPFP;
-      cl_features |= ARC_DPFP;
+      selected_cpu.features |= DPX;
+      cl_features |= DPX;
       arc_check_feature ();
       break;
 
     case OPTION_FPUDA:
-      selected_cpu.features |= ARC_FPUDA;
-      cl_features |= ARC_FPUDA;
+      selected_cpu.features |= DPA;
+      cl_features |= DPA;
       arc_check_feature ();
       break;
 
@@ -4844,10 +4858,10 @@ arc_set_public_attributes (void)
     case E_ARC_MACH_ARC700:
       base = TAG_CPU_ARC7xx;
       break;
-    case  EF_ARC_CPU_ARCV2EM:
+    case EF_ARC_CPU_ARCV2EM:
       base = TAG_CPU_ARCEM;
       break;
-    case  EF_ARC_CPU_ARCV2HS:
+    case EF_ARC_CPU_ARCV2HS:
       base = TAG_CPU_ARCHS;
       break;
     default:
@@ -4860,9 +4874,23 @@ arc_set_public_attributes (void)
   arc_set_attribute_int (Tag_ARC_CPU_variation, 0);
 
   /* Tag_ARC_ABI_osver.  */
-  arc_set_attribute_int (Tag_ARC_ABI_osver, E_ARC_OSABI_CURRENT >> 8);
+  if (attributes_set_explicitly[Tag_ARC_ABI_osver])
+    {
+      int val = bfd_elf_get_obj_attr_int (stdoutput, OBJ_ATTR_PROC,
+					  Tag_ARC_ABI_osver);
+
+      selected_cpu.eflags = ((selected_cpu.eflags & ~EF_ARC_OSABI_MSK)
+			     | (val & 0x0f << 8));
+      bfd_set_private_flags (stdoutput, selected_cpu.eflags);
+    }
+  else
+    {
+      arc_set_attribute_int (Tag_ARC_ABI_osver, E_ARC_OSABI_CURRENT >> 8);
+    }
 
   /* Tag_ARC_ISA_config.  */
+  arc_check_feature();
+
   for (i = 0; i < ARRAY_SIZE (feature_list); i++)
     if (selected_cpu.features & feature_list[i].feature)
       s = arc_stralloc (s, feature_list[i].attr);

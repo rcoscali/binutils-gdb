@@ -36,11 +36,26 @@ const struct feature_type
   const char *name;
 }  FEATURE_LIST_NAME [] =
   {
-    { ARC_CD,     ARC_OPCODE_ARCV2,   "CD",     "code-density" },
-    { ARC_NPS400, ARC_OPCODE_ARC700,  "NPS400", "nps400" },
-    { ARC_SPFP,   ARC_OPCODE_ARCFPX,  "SPFP",   "single-precision FPX" },
-    { ARC_DPFP,   ARC_OPCODE_ARCFPX,  "DPFP",   "double-precision FPX" },
-    { ARC_FPUDA,  ARC_OPCODE_ARCv2EM, "FPUDA",  "double assist FP" }
+    { CVT,     ARC_OPCODE_ARCV2,    "CVT",     "FP conversion" },
+    { BTSCN,   ARC_OPCODE_ARCALL,   "BTSCN",   "bit-scan" },
+    { CD,      ARC_OPCODE_ARCV2,    "CD",      "code-density" },
+    { COND,    ARC_OPCODE_ARCALL,   "COND",    "conditionals" },
+    { DIV,     ARC_OPCODE_ARCV2,    "DIVREM",  "div/rem" },
+    { DP,      ARC_OPCODE_ARCv2HS,  "DFPU",    "double-precision FPU" },
+    { DPA,     ARC_OPCODE_ARCv2EM,  "FPUDA",   "double assist FP" },
+    { DPX,     ARC_OPCODE_ARCFPX,   "DPFP",    "double-precision FPX" },
+    { MPY1E,   ARC_OPCODE_ARCV2,    "MPY1E",   "mpy1e" },
+    { MPY6E,   ARC_OPCODE_ARCMPY6E, "MPY6E",   "mpy6e" },
+    { MPY7E,   ARC_OPCODE_ARCV2,    "MPY7E",   "mpy7e" },
+    { MPY8E,   ARC_OPCODE_ARCV2,    "MPY8E",   "mpy8e" },
+    { MPY9E,   ARC_OPCODE_ARCv2HS,  "MPY9E",   "mpy9e" },
+    { NPS400,  ARC_OPCODE_ARC700,   "NPS400",  "nps400" },
+    { QUARKSE, ARC_OPCODE_ARCv2EM,  "QUARKSE", "QuarkSE-EM" },
+    { SHFT1,   ARC_OPCODE_ARCALL,   "SA",      "shift assist" },
+    { SHFT2,   ARC_OPCODE_ARCALL,   "BS",      "barrel-shifter" },
+    { SWAP,    ARC_OPCODE_ARCALL,   "SWAP",    "swap" },
+    { SP,      ARC_OPCODE_ARCV2,    "SFPU",    "double-precision FPU" },
+    { SPX,     ARC_OPCODE_ARCFPX,   "SPFP",    "single-precision FPX" },
   };
 
 #ifndef CONFLICT_LIST
@@ -49,7 +64,11 @@ const struct feature_type
 
 /* A table with conflicting features.  */
 unsigned CONFLICT_LIST [] = {
-  ARC_NPS400 | ARC_CD | ARC_FPUDA,
-  ARC_DPFP | ARC_FPUDA
+  NPS400 | DPA,
+  DPX | DPA,
+  SP | DPX,
+  SP | SPX,
+  DP | DPX,
+  DP | SPX
 };
 #endif

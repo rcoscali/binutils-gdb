@@ -556,7 +556,7 @@ arc_extract_features (const char *p)
   if (!p)
     return 0;
 
-  for (i = 0; (i < ARRAY_SIZE (bfd_feature_list)); i++)
+  for (i = 0; i < ARRAY_SIZE (bfd_feature_list); i++)
     if (strstr(p, bfd_feature_list[i].attr) != NULL)
       r |= bfd_feature_list[i].feature;
 
@@ -658,7 +658,8 @@ arc_elf_merge_attributes (bfd *ibfd, struct bfd_link_info *info)
 	case Tag_ARC_CPU_base:
 	  if (out_attr[i].i == 0)
 	    out_attr[i].i = in_attr[i].i;
-	  else if (in_attr[i].i != 0 && out_attr[i].i != in_attr[i].i)
+	  else if (in_attr[i].i != 0 && out_attr[i].i != in_attr[i].i
+		   && ((out_attr[i].i + in_attr[i].i) < 6))
 	    {
 	      /* We cannot mix code for different CPUs.  */
 	      _bfd_error_handler
@@ -666,6 +667,7 @@ arc_elf_merge_attributes (bfd *ibfd, struct bfd_link_info *info)
 		   "with %B"),
 		 obfd, ibfd);
 	      result = FALSE;
+	      break;
 	    }
 	  else
 	    {
@@ -688,10 +690,9 @@ arc_elf_merge_attributes (bfd *ibfd, struct bfd_link_info *info)
 	      out_feature = arc_extract_features (p2);
 
 	      for (j = 0; j < ARRAY_SIZE (bfd_feature_list); j++)
-		if (((in_feature & bfd_feature_list[j].feature)
-		     && !(cpu1 & bfd_feature_list[i].cpus))
-		    || ((out_feature & bfd_feature_list[j].feature)
-			&& !(cpu2 & bfd_feature_list[i].cpus)))
+		if (((in_feature | out_feature) & bfd_feature_list[j].feature)
+		    && (!(cpu1 & bfd_feature_list[j].cpus)
+			 || !(cpu2 & bfd_feature_list[j].cpus)))
 		  {
 		    _bfd_error_handler
 		      (_("error: %B: unable to merge ISA extension attributes "
@@ -715,14 +716,16 @@ arc_elf_merge_attributes (bfd *ibfd, struct bfd_link_info *info)
 	      out_feature |= in_feature;
 	      p1 = NULL;
 	      for (j = 0; j < ARRAY_SIZE (bfd_feature_list); j++)
-		if (out_feature & bfd_feature_list[i].feature)
-		  p1 = arc_stralloc (p1, bfd_feature_list[i].attr);
+		if (out_feature & bfd_feature_list[j].feature)
+		  p1 = arc_stralloc (p1, bfd_feature_list[j].attr);
 	      out_attr[Tag_ARC_ISA_config].s = _bfd_elf_attr_strdup (obfd, p1);
 	    }
-	  break;
-
+	  /* Fall through.  */
 	case Tag_ARC_CPU_variation:
-	  if (out_attr[i].i == 0)
+	case Tag_ARC_ISA_mpy_option:
+	case Tag_ARC_ABI_osver:
+	  /* Use the largest value specified.  */
+	  if (in_attr[i].i > out_attr[i].i)
 	    out_attr[i].i = in_attr[i].i;
 	  break;
 
@@ -741,13 +744,6 @@ arc_elf_merge_attributes (bfd *ibfd, struct bfd_link_info *info)
 		 obfd, ibfd);
 	      result = FALSE;
 	    }
-	  break;
-
-	case Tag_ARC_ISA_mpy_option:
-	case Tag_ARC_ABI_osver:
-	  /* Use the largest value specified.  */
-	  if (in_attr[i].i > out_attr[i].i)
-	    out_attr[i].i = in_attr[i].i;
 	  break;
 
 	case Tag_ARC_ABI_pic:
@@ -788,7 +784,7 @@ arc_elf_merge_attributes (bfd *ibfd, struct bfd_link_info *info)
   if (!_bfd_elf_merge_object_attributes (ibfd, info))
     return FALSE;
 
-  /* Check for any attributes not known on ARM.  */
+  /* Check for any attributes not known on ARC.  */
   result &= _bfd_elf_merge_unknown_attribute_list (ibfd, obfd);
 
   return result;
@@ -866,7 +862,11 @@ arc_elf_merge_private_bfd_data (bfd *ibfd, struct bfd_link_info *info)
 			      ibfd, bfd_get_filename (obfd));
 	  return FALSE;
 	}
-      else if (in_flags != out_flags)
+      else if ((in_flags != out_flags)
+	       /* If we have object attributes, then we already
+		  checked the objects compatibility, skip it.  */
+	       && !bfd_elf_get_obj_attr_int (ibfd, OBJ_ATTR_PROC,
+					     Tag_ARC_CPU_base))
 	{
 	  /* Warn if different flags.  */
 	  _bfd_error_handler
@@ -979,6 +979,7 @@ arc_elf_final_write_processing (bfd * abfd,
   unsigned long emf;
   int osver = bfd_elf_get_obj_attr_int (abfd, OBJ_ATTR_PROC,
 					Tag_ARC_ABI_osver);
+  flagword e_flags = elf_elfheader (abfd)->e_flags & ~EF_ARC_OSABI_MSK;
 
   switch (bfd_get_mach (abfd))
     {
@@ -1002,11 +1003,11 @@ arc_elf_final_write_processing (bfd * abfd,
 
   /* Record whatever is the current syscall ABI version.  */
   if (osver)
-    elf_elfheader (abfd)->e_flags |= osver << 8;
+    e_flags |= ((osver & 0x0f) << 8);
   else
-    elf_elfheader (abfd)->e_flags |= E_ARC_OSABI_V3;
+    e_flags |= E_ARC_OSABI_V3;
 
-  return;
+  elf_elfheader (abfd)->e_flags |=  e_flags;
 }
 
 #ifdef ARC_ENABLE_DEBUG
