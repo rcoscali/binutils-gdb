@@ -1,2 +1,2 @@
 	.cpu em
-	.arc_attribute Tag_ARC_ISA_config, "SFPU"
+	.arc_attribute Tag_ARC_ISA_config, "FPUS"

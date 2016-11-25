@@ -490,6 +490,9 @@ static const struct cpu_type
 /* Information about the cpu/variant we're assembling for.  */
 static struct cpu_type selected_cpu = { 0, 0, 0, E_ARC_OSABI_CURRENT, 0 };
 
+/* MPY option.  */
+static unsigned mpy_option = 0;
+
 /* Command line given features.  */
 static unsigned cl_features = 0;
 
@@ -844,7 +847,6 @@ arc_check_feature (void)
 static void
 arc_select_cpu (const char *arg, enum mach_selection_type sel)
 {
-  int cpu_flags = 0;
   int i;
 
   /* We should only set a default if we've not made a selection from some
@@ -1019,12 +1021,6 @@ arc_option (int ignore ATTRIBUTE_UNUSED)
     cpu_name = "nps400";
 
   arc_select_cpu (cpu_name, MACH_SELECTION_FROM_CPU_DIRECTIVE);
-
-  if (!bfd_set_arch_mach (stdoutput, bfd_arch_arc, selected_cpu.mach))
-    as_fatal (_("could not set architecture and machine"));
-
-  /* Set elf header flags.  */
-  bfd_set_private_flags (stdoutput, selected_cpu.eflags);
 
   restore_line_pointer (c);
   demand_empty_rest_of_line ();
@@ -2345,10 +2341,20 @@ static void
 autodetect_feature_list (const struct arc_opcode *opcode)
 {
   unsigned i;
+  struct mpy_type
+  {
+    unsigned feature;
+    unsigned encoding;
+  } mpy_list[] = {{ MPY1E, 1 }, { MPY6E, 6 }, { MPY7E, 7 }, { MPY8E, 8 },
+		 { MPY9E, 9 }};
 
   for (i = 0; i < ARRAY_SIZE (feature_list); i++)
     if (opcode->subclass == feature_list[i].feature)
       selected_cpu.features |= feature_list[i].feature;
+
+  for (i = 0; i < ARRAY_SIZE (mpy_list); i++)
+    if (opcode->subclass == mpy_list[i].feature)
+      mpy_option = mpy_list[i].encoding;
 }
 
 /* Given an opcode name, pre-tockenized set of argumenst and the
@@ -4868,10 +4874,11 @@ arc_set_public_attributes (void)
       base = 0;
       break;
     }
-  arc_set_attribute_int (Tag_ARC_CPU_base, base);
-
-  /* Tag_ARC_CPU_variation.  */
-  arc_set_attribute_int (Tag_ARC_CPU_variation, 0);
+  if (attributes_set_explicitly[Tag_ARC_CPU_base]
+      && (base != bfd_elf_get_obj_attr_int (stdoutput, OBJ_ATTR_PROC,
+					    Tag_ARC_CPU_base)))
+    as_warn (_("Overwrite explicitly set Tag_ARC_CPU_base"));
+  bfd_elf_add_proc_attr_int (stdoutput, Tag_ARC_CPU_base, base);
 
   /* Tag_ARC_ABI_osver.  */
   if (attributes_set_explicitly[Tag_ARC_ABI_osver])
@@ -4881,7 +4888,6 @@ arc_set_public_attributes (void)
 
       selected_cpu.eflags = ((selected_cpu.eflags & ~EF_ARC_OSABI_MSK)
 			     | (val & 0x0f << 8));
-      bfd_set_private_flags (stdoutput, selected_cpu.eflags);
     }
   else
     {
@@ -4897,6 +4903,9 @@ arc_set_public_attributes (void)
 
   if (s)
     arc_set_attribute_string (Tag_ARC_ISA_config, s);
+
+  /* Tag_ARC_ISA_mpy_option.  */
+  arc_set_attribute_int (Tag_ARC_ISA_mpy_option, mpy_option);
 }
 
 /* Add the default contents for the .ARC.attributes section.  */
@@ -4904,9 +4913,12 @@ arc_set_public_attributes (void)
 void
 arc_md_end (void)
 {
-  if ((selected_cpu.eflags & EF_ARC_OSABI_MSK) < E_ARC_OSABI_V4)
-    return;
   arc_set_public_attributes ();
+
+  if (!bfd_set_arch_mach (stdoutput, bfd_arch_arc, selected_cpu.mach))
+    as_fatal (_("could not set architecture and machine"));
+
+  bfd_set_private_flags (stdoutput, selected_cpu.eflags);
 }
 
 void arc_copy_symbol_attributes (symbolS *dest, symbolS *src)
