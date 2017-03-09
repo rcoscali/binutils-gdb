@@ -41,6 +41,7 @@
 #include "gdbthread.h"
 /* linux_init_abi */
 #include "linux-tdep.h"
+#include "glibc-tdep.h"
 
 /* ARC header files */
 #include "arc-tdep.h"
@@ -761,6 +762,7 @@ arc_linux_software_single_step (struct frame_info *frame)
 }	/* arc_linux_software_single_step () */
 
 
+#if 0
 /*! Find where to put a breakpoint after the resolver.
 
     See the comments for SKIP_SOLIB_RESOLVER at the top of infrun.c.
@@ -815,6 +817,7 @@ arc_linux_skip_solib_resolver (struct gdbarch *gdbarch, CORE_ADDR pc)
       return 0;
     }
 }	/* arc_linux_skip_solib_resolver () */
+#endif
 
 
 /*! Call the right architecture variant's supply_gregset function.
@@ -922,7 +925,7 @@ arc_linux_init_osabi (struct gdbarch_info info, struct gdbarch *gdbarch)
   set_gdbarch_fetch_tls_load_module_address (gdbarch,
                                              svr4_fetch_objfile_link_map);
   set_gdbarch_software_single_step (gdbarch, arc_linux_software_single_step);
-  set_gdbarch_skip_solib_resolver (gdbarch, arc_linux_skip_solib_resolver);
+  set_gdbarch_skip_solib_resolver (gdbarch, glibc_skip_solib_resolver);
   set_gdbarch_iterate_over_regset_sections
     (gdbarch, arc_linux_iterate_over_regset_sections);
   /* No need for any other GDB architecture core file functions. */
